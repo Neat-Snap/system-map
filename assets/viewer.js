@@ -315,9 +315,8 @@
     if (hotNode && !L) {   // hovering a neighbour: who else it is connected to in this scene
       const others = side.filter((s) => s.a === hotNode || s.b === hotNode).map((s) => (s.a === hotNode ? s.b : s.a));
       caption.innerHTML = `<b>${esc(hotNode.label)}</b>${others.length ? ` <span>also connects to</span> ${others.map((o) => `<b>${esc(o.label)}</b>`).join('<span>, </span>')}` : ` <span>${esc(hotNode.description || '')}</span>`}`;
-    } else if (!L) {
-      const n = current;
-      caption.innerHTML = `<b>${esc(n.label)}</b>${n.description ? ` <span>${esc(n.description)}</span>` : ''}`;
+    } else if (!L) {   // nothing hovered: the open block already shows its own description
+      caption.classList.remove('show'); return;
     } else {
       const how = L.info.how, v = VERBW[how];
       const tile = L.tile ? containedBy.get(`${current.id}:${L.tile}`) : null;
@@ -564,7 +563,7 @@
   const flowArrow = (() => { const m = mk('marker', { id: 'fa', viewBox: '0 0 10 10', refX: 9, refY: 5, markerWidth: 10, markerHeight: 10, markerUnits: 'userSpaceOnUse', orient: 'auto' }, flowDefs);
     mk('path', { d: 'M0,1 L9,5 L0,9 z', fill: '#3b7cff' }, m); return 'url(#fa)'; })();
   if (FLOWS.length) {
-    flowMenu.innerHTML = `<div class="fh">how it works</div>` + FLOWS.map((f, i) => `<button data-i="${i}">${esc(f.title)}<span>${f.steps.length} steps</span></button>`).join('');
+    flowMenu.innerHTML = FLOWS.map((f, i) => `<button data-i="${i}">${esc(f.title)}<span></span></button>`).join('');
     flowMenu._sp = [...flowMenu.querySelectorAll('button span')].map((x) => x.textContent);
     flowMenu.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return;
       const f = FLOWS[+b.dataset.i], at = current ? f.steps.findIndex((s) => s.from === current.id || s.to === current.id) : -1;
@@ -580,9 +579,8 @@
     flowMenu.querySelectorAll('button').forEach((b, i) => {
       const steps = FLOWS[i].steps, at = n ? steps.findIndex((s) => s.from === n.id || s.to === n.id) : -1;
       b.classList.toggle('off', !!n && at < 0);
-      b.querySelector('span').textContent = n && at >= 0 ? `passes here at step ${at + 1}` : flowMenu._sp[i];
+      b.querySelector('span').textContent = n && at >= 0 ? `step ${at + 1}` : '';
     });
-    flowMenu.querySelector('.fh').textContent = n ? `stories through ${n.label}` : 'how it works';
   }
   function endFlow() {
     if (!flow) return;
@@ -780,12 +778,10 @@
   };
   const SRC = { docs: 'from the docs', notes: 'from your infra notes', inferred: 'inferred, not confirmed' };
   function showTip(n, x, y) {
-    const up = holdsUp.get(n).size, down = below(n).length;
     const inside = (n.contains || []).map((c) => c.label);
     tip.innerHTML = `<b>${esc(n.label)}</b>${n.kind ? `<span class="k">${esc(n.kind)}</span>` : ''}
       ${n.description ? `<p>${esc(n.description)}</p>` : ''}${inside.length ? `<div class="sig">holds: ${inside.map(esc).join(' · ')}</div>` : ''}
-      ${n.hostUnknown ? `<div class="unk">where this runs isn't in the repo or docs</div>` : ''}${SRC[n.source] ? `<div class="src">${SRC[n.source]}</div>` : ''}${n._ed ? `<div class="ed">${{ new: 'added by you', changed: 'changed by you', removed: 'removed by you', noted: 'you left a note' }[n._ed]}${n._note ? `: “${esc(n._note)}”` : ''}</div>` : ''}
-      <div class="m">${n.layer ? `${LAYER_NAME[n.layer]} · ` : ''}${up ? `holds up ${up}` : 'nothing on top'} · ${down ? `rests on ${down}` : 'foundation'}${n !== current ? ' · click to open' : ''}</div>`;
+      ${n.hostUnknown ? `<div class="unk">where this runs isn't in the repo or docs</div>` : ''}${SRC[n.source] ? `<div class="src">${SRC[n.source]}</div>` : ''}${n._ed ? `<div class="ed">${{ new: 'added by you', changed: 'changed by you', removed: 'removed by you', noted: 'you left a note' }[n._ed]}${n._note ? `: “${esc(n._note)}”` : ''}</div>` : ''}`;
     placeTip(x, y);
   }
   function showChipTip(c, x, y) {

@@ -199,7 +199,7 @@ ${JSON.stringify(state.ops, null, 1)}
     bar?.remove(); bar = null;
     document.body.classList.toggle('editing', E.editing);
     if (!E.editing) return;
-    bar = h(`<div id="ebar"><div class="bh"><b>editing</b> <span>click a block to change it</span></div>
+    bar = h(`<div id="ebar"><div class="bh"><b>editing</b></div>
       <ol>${state.ops.map((o, i) => `<li>${api.esc(plain(line(o)))}<button data-a="undo" data-i="${i}" title="drop this change">×</button></li>`).join('')}</ol>
       <div class="acts"><button data-a="add">+ block</button>${state.ops.length ? `<button data-a="copy" class="primary">copy for agent</button>${server ? '<button data-a="save" class="primary">save for agent</button>' : ''}<button data-a="clear">discard all</button>` : ''}<button data-a="done">done</button></div>
       <div class="msg">${state.saved ? 'handed to the agent. Tell it: "apply the system-map changes".' : ''}</div></div>`);
