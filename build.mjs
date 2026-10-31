@@ -33,6 +33,9 @@ if (map.symbols && missing.length) warnings.push(`${missing.length} symbol(s) in
 const withUses = nodes.filter((n) => n.on?.length && !n.uses).length;
 if (withUses) warnings.push(`${withUses} block(s) have "on" but no "uses"; their connections show as bare lines`);
 for (const e of map.edges || []) for (const end of ['from', 'to']) if (!ids.has(e[end])) errors.push(`edge ${e.from} → ${e.to}: unknown ${end} id "${e[end]}"`);
+for (const n of nodes) if (n.source && !['code', 'config', 'docs', 'notes', 'inferred'].includes(n.source)) errors.push(`"${n.id}".source must be code, config, docs, notes or inferred`);
+const unk = nodes.filter((n) => n.hostUnknown).map((n) => n.id);
+if (unk.length) warnings.push(`host unknown for: ${unk.join(', ')}; ask the user and record it in infra.md next to map.json`);
 if (nodes.length > 45) warnings.push(`${nodes.length} blocks; above ~40 the labels get small`);
 warnings.forEach((w) => console.warn('warn:', w));
 if (errors.length) { errors.forEach((e) => console.error('error:', e)); process.exit(1); }

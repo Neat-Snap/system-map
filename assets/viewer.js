@@ -474,6 +474,7 @@
     narrIdx = -1; lastNarr = performance.now() + 900;
     narrate();
 
+    if (FLOWS.length) markFlows(n);
     title.innerHTML = [M.title || '', ...history.map((h) => h.label), n.label].filter(Boolean).map(esc).join(' <i>›</i> ');
     const half = Math.max(hp, hu, fw / 2, talkers.length ? ht + 120 : 0);
     const top = ghosts.length ? gy - 40 : users.length ? -yu - 30 : -70 - lift, bot = provs.length ? yp + 30 : 70;
@@ -484,6 +485,7 @@
   function toStack() {
     endFlow();
     current = null; history = [];
+    if (FLOWS.length) markFlows(null);
     document.body.classList.remove('scene');
     clearScene(); narrate();
     for (const m of all) { m._el.classList.remove('focus', 'prov', 'user', 'talk', 'on', 'gone', 'ghost'); stackPose(m); }
@@ -562,7 +564,24 @@
     mk('path', { d: 'M0,1 L9,5 L0,9 z', fill: '#3b7cff' }, m); return 'url(#fa)'; })();
   if (FLOWS.length) {
     flowMenu.innerHTML = `<div class="fh">how it works</div>` + FLOWS.map((f, i) => `<button data-i="${i}">${esc(f.title)}<span>${f.steps.length} steps</span></button>`).join('');
-    flowMenu.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) startFlow(FLOWS[+b.dataset.i]); });
+    flowMenu._sp = [...flowMenu.querySelectorAll('button span')].map((x) => x.textContent);
+    flowMenu.addEventListener('click', (e) => { const b = e.target.closest('button'); if (!b) return;
+      const f = FLOWS[+b.dataset.i], at = current ? f.steps.findIndex((s) => s.from === current.id || s.to === current.id) : -1;
+      startFlow(f, Math.max(0, at)); });
+    // hovering a story in the stack lights the blocks it passes through, so you see where it sits in the whole
+    flowMenu.addEventListener('mouseover', (e) => { const b = e.target.closest('button'); if (!b || flow || current) return;
+      const ids = new Set(FLOWS[+b.dataset.i].steps.flatMap((s) => [s.from, s.to]));
+      for (const m of all) { m._el.classList.toggle('path', ids.has(m.id)); m._el.classList.toggle('dimmed', !ids.has(m.id)); } });
+    flowMenu.addEventListener('mouseleave', () => { for (const m of all) m._el.classList.remove('path', 'dimmed'); });
+  }
+  // in a scene: which stories pass through the open block, and at which step
+  function markFlows(n) {
+    flowMenu.querySelectorAll('button').forEach((b, i) => {
+      const steps = FLOWS[i].steps, at = n ? steps.findIndex((s) => s.from === n.id || s.to === n.id) : -1;
+      b.classList.toggle('off', !!n && at < 0);
+      b.querySelector('span').textContent = n && at >= 0 ? `passes here at step ${at + 1}` : flowMenu._sp[i];
+    });
+    flowMenu.querySelector('.fh').textContent = n ? `stories through ${n.label}` : 'how it works';
   }
   function endFlow() {
     if (!flow) return;
@@ -572,7 +591,8 @@
     document.body.classList.remove('flowing'); caption.classList.remove('show', 'ctl');
     flowG.innerHTML = ''; flow = null;
   }
-  function startFlow(f) {
+  function startFlow(f, from = 0) {
+    markFlows(null); for (const m of all) m._el.classList.remove('path', 'dimmed');
     if (current) { clearScene(); current = null; history = []; document.body.classList.remove('scene'); }
     endFlow();
     document.body.classList.add('flowing'); hideTip();
@@ -604,7 +624,7 @@
     flow = { f, pose, idx: -1, playing: true, timer: 0, packet: null };
     zoom = 1;
     flyTo({ s: fitScale(Math.max(w1, w2) + 120, own.length ? 420 : 200, 0.92, 0.7), tx: 0, ty: own.length ? 100 : 0, rx: -20, ry: -8, px: 0, py: 0 }, 900);
-    setTimeout(() => flow && flowStep(0), 950);
+    setTimeout(() => flow && flowStep(from), 950);
   }
   const topOf = (p) => ({ x: p.x, y: p.y - p.h / 2 - 34, z: p.z });
   function flowStep(i) {
@@ -728,11 +748,13 @@
     tip.style.left = `${Math.min(innerWidth - w - 10, x + 16)}px`;
     tip.style.top = `${Math.min(innerHeight - h - 10, y + 16)}px`;
   };
+  const SRC = { docs: 'from the docs', notes: 'from your infra notes', inferred: 'inferred, not confirmed' };
   function showTip(n, x, y) {
     const up = holdsUp.get(n).size, down = below(n).length;
     const inside = (n.contains || []).map((c) => c.label);
     tip.innerHTML = `<b>${esc(n.label)}</b>${n.kind ? `<span class="k">${esc(n.kind)}</span>` : ''}
       ${n.description ? `<p>${esc(n.description)}</p>` : ''}${inside.length ? `<div class="sig">holds: ${inside.map(esc).join(' · ')}</div>` : ''}
+      ${n.hostUnknown ? `<div class="unk">where this runs isn't in the repo or docs</div>` : ''}${SRC[n.source] ? `<div class="src">${SRC[n.source]}</div>` : ''}
       <div class="m">${n.layer ? `${LAYER_NAME[n.layer]} · ` : ''}${up ? `holds up ${up}` : 'nothing on top'} · ${down ? `rests on ${down}` : 'foundation'}${n !== current ? ' · click to open' : ''}</div>`;
     placeTip(x, y);
   }

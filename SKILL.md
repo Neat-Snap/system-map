@@ -19,6 +19,8 @@ It explains **how the system works, not how the code is laid out.** The reader i
   - moves a small block carrying what travels from part to part, one step at a time
   - leaves numbered threads behind it
   - narrates each step at the bottom; ‹ › or the arrow keys step through it, space pauses
+  - in the stack, hovering a story in the menu lights up the blocks it passes through
+  - inside a block's scene, the menu shows only the stories passing through that block ("passes here at step 4"), and playing one starts at that step
 - **Overview:** the stack.
   - Platforms (dark), data stores (green, with disk stripes) and outside services (white) look different from the app's own parts (soft colours by group).
   - Foundations that nothing rests on stand in a low row in front.
@@ -50,6 +52,18 @@ Output: `<project>/.system-map/<scope>/map.json` → `map.html` next to it. `<sc
 - Aim for 15–30 blocks for a whole system, 8–20 for a slice.
 
 ## 1. Discover (cheap tools only)
+Infrastructure is often decided outside the code, so read every source below. Each later one overrides the earlier ones:
+1. **Code and config** (below).
+2. **Written descriptions in the repo:**
+   - `README*`, `AGENTS.md`, `CLAUDE.md`, `CONTRIBUTING.md`
+   - `docs/` pages about architecture, deployment, self-hosting, ops or runbooks; ADRs (`adr/`, `decisions/`)
+   - mermaid or PlantUML diagrams in markdown, infra comments in compose and env files
+   - env example comments, and hostnames in example URLs (`*.neon.tech`, `*.supabase.co`, `*.rds.amazonaws.com`, `*.upstash.io`, `cloud.qdrant.io`, `*.r2.cloudflarestorage.com`)
+   - Note what a self-hosting guide says, but it describes *their* deploy, not necessarily production. Keep the two apart.
+3. **The user's infra notes:** `<project>/.system-map/infra.md`. This is plain prose the user owns, e.g. "Postgres: Neon, eu-central. Hatchet: Hatchet Cloud. Worker: Hetzner box via Dokploy." It overrides everything else. Read it first if it exists. Never delete what's in it.
+4. **What the user says in chat** about their infra: append it to `infra.md` (create the file if needed) so the next run knows it too.
+
+Then, from code and config:
 - **Where it runs:** read the deploy and infra configs:
   - `Dockerfile*`, `docker-compose*.yml`
   - `wrangler.*`, `vercel.json`, `netlify.toml`, `fly.toml`, `render.yaml`, `railway.*`
@@ -101,7 +115,11 @@ Output: `<project>/.system-map/<scope>/map.json` → `map.html` next to it. `<sc
 
 `edges`: talking between parts where neither rests on the other: dashboard → API over HTTP, GitHub → webhook intake, CI → hosting. Format: `{ "from", "to", "how", "what", "note" }`. Data moves from `from` to `to`.
 
-Only claim what you saw in code or config. If where something is hosted isn't in the repo (e.g. the database host), leave it off and say so.
+Only claim what a source above says. Mark how you know, when it isn't code or config:
+- `"source": "docs" | "notes" | "inferred"` on a block (default is code or config). The hover pop-up shows "from the docs", "from your infra notes" or "inferred, not confirmed".
+- Use `inferred` sparingly, only for a strong hint such as a `*.neon.tech` example URL.
+- When no source says where a store, queue or service runs, don't invent a platform. Set `"hostUnknown": true`: the pop-up says so, and the build lists it.
+- When that happens, create or extend `infra.md` with a short "Unknown" section listing each one as a question ("Postgres: where is it hosted? (Neon, RDS, self-hosted on …)"), so the user can answer once. On the next run, turn the answers into platform blocks and put the block `on` them, with `"source": "notes"`.
 
 ## 4. Flows: how the system works
 Write **3–5 flows**, the stories someone needs to understand the system. Pick the main user action, an async or background path, a payment or auth path, and a deploy. Each step is one hop:
@@ -160,5 +178,5 @@ Reply with:
 - the HTML path
 - the scope and block count
 - a 3–5 line plain summary of the architecture: where things run, the main flow, where data lives
-- anything inferred or not visible in the repo (e.g. where the database is hosted)
+- anything inferred or not visible in the repo (e.g. where the database is hosted), and that answering the questions in `infra.md` or in chat fills them in
 - the controls: hover, click to open, click a neighbour to walk, drag to rotate, shift-drag to move, scroll to zoom, Esc to go back, `t` to tour
