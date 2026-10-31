@@ -4,6 +4,7 @@ A Claude Code skill that maps a project's architecture as an interactive 3D depe
 
 - **Stack:** every part is a block resting on what it runs on or needs. Platforms, data stores and outside services each look different from the app's own parts.
 - **How it works:** play flows ("a pull request gets reviewed") step by step. A small block carries what moves from part to part, and each step is narrated in plain words.
+- **Edit, then hand it to your agent:** change the architecture on the map (move a part to another host, add a cache, cut a connection, leave a note). The edits turn into a precise change request with context, which the agent applies to the code and the map.
 - **Scenes:** click a block to open it. Its neighbours line up around it, what it holds (tables, queues) stands on top, and each connection says how the parts talk and what crosses.
 
 ## Install
@@ -18,6 +19,14 @@ Then ask Claude Code to "map the architecture of this repo". The agent writes `.
 node ~/.claude/skills/system-map/build.mjs map.json map.html
 ```
 
+To edit and save changes straight to the project, serve the maps:
+
+```bash
+node ~/.claude/skills/system-map/serve.mjs .system-map 8765
+```
+
+Press `e` on the map, make changes, click "save for agent", then tell Claude Code "apply the system-map changes".
+
 `shot.mjs` takes screenshots for checking and needs Playwright.
 
 ## Controls
@@ -25,3 +34,4 @@ node ~/.claude/skills/system-map/build.mjs map.json map.html
 - Drag rotates. Shift-drag, right-drag or the arrow keys move the view. Scroll zooms toward the cursor.
 - Hover for details. Click a block to open it, and click a neighbour to walk there. Esc goes back.
 - Use the "how it works" menu (top-right) to play flows. ‹ › steps through them and space pauses.
+- Press `e` to edit. Click a block to change it, "+ block" adds one, and "copy/save for agent" hands the changes over.

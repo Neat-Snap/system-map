@@ -530,7 +530,8 @@
         const [x1, y1] = ctr(s.a._el), [x2, y2] = ctr(s.b._el);
         const mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = mx - fx, dy = my - fy, dl = Math.hypot(dx, dy) || 1;
         const hot = hotNode && (s.a === hotNode || s.b === hotNode);
-        s.op = ease1(s.op ?? 0.7, hotLink ? 0.2 : hot ? 0.95 : 0.6);
+        s.op = ease1(s.op ?? 0, hot ? 0.95 : 0);
+        if (s.op < 0.02) continue;
         mk('path', { d: `M${x1},${y1} Q${mx + (dx / dl) * 70},${my + (dy / dl) * 70} ${x2},${y2}`, fill: 'none', stroke: hot ? '#5b6167' : '#b4b8bd',
           'stroke-width': hot ? 1.8 : 1.1, opacity: s.op }, layerG);
       }
@@ -586,7 +587,7 @@
   function endFlow() {
     if (!flow) return;
     clearTimeout(flow.timer); flow.packet?.remove();
-    for (const m of all) m._el.classList.remove('active', 'was');
+    for (const m of all) m._el.classList.remove('active', 'was', 'send', 'recv', 'next');
     flowMenu.querySelectorAll('button').forEach((b) => b.classList.remove('on'));
     document.body.classList.remove('flowing'); caption.classList.remove('show', 'ctl');
     flowG.innerHTML = ''; flow = null;
@@ -621,9 +622,10 @@
     Object.assign(sceneFloor.style, { width: `${fr}px`, height: `${fr * 0.5}px`, left: `${-fr / 2}px`, top: `${-fr * 0.25}px`, transform: `translateY(37px) rotateX(90deg)` });
     sceneFloor.classList.remove('hidden');
     title.innerHTML = `${esc(M.title || '')} <i>›</i> ${esc(f.title)}`;
-    flow = { f, pose, idx: -1, playing: true, timer: 0, packet: null };
+    const span = Math.max(w1, w2), VIEW = 1500;
+    flow = { f, pose, idx: -1, playing: true, timer: 0, packet: null, prog: 0, wide: span > VIEW ? (span - VIEW) / 2 + 60 : 0 };
     zoom = 1;
-    flyTo({ s: fitScale(Math.max(w1, w2) + 120, own.length ? 420 : 200, 0.92, 0.7), tx: 0, ty: own.length ? 100 : 0, rx: -20, ry: -8, px: 0, py: 0 }, 900);
+    flyTo({ s: fitScale(Math.min(span, VIEW) + 120, own.length ? 420 : 200, 0.92, 0.7), tx: 0, ty: own.length ? 100 : 0, rx: -20, ry: -8, px: 0, py: 0 }, 900);
     setTimeout(() => flow && flowStep(from), 950);
   }
   const topOf = (p) => ({ x: p.x, y: p.y - p.h / 2 - 34, z: p.z });
@@ -634,25 +636,47 @@
     clearTimeout(flow.timer);
     flow.idx = i;
     const s = f.steps[i], a = byId.get(s.from), b = byId.get(s.to);
-    for (const m of all) m._el.classList.remove('active', 'was');
+    for (const m of all) m._el.classList.remove('active', 'was', 'send', 'recv', 'next');
     for (const t of f.steps.slice(0, i)) { byId.get(t.from)._el.classList.add('was'); byId.get(t.to)._el.classList.add('was'); }
-    a._el.classList.add('active'); b._el.classList.add('active');
-    // the small block carrying what moves
+    void a._el.offsetWidth;   // restart the pulse when the same block sends twice in a row
+    a._el.classList.add('active', 'send'); if (b !== a) b._el.classList.add('next');
+    // the small block carrying what moves: it lifts off the sender, arcs over and lands on the receiver
     flow.packet?.remove();
     const item = { name: s.what || '', glyph: HOW[s.how] || '', sub: '' };
-    const pk = blockOf('chip packet', item, topOf(pose.get(a)), COL.user, 0);
-    flow.packet = pk;
-    requestAnimationFrame(() => requestAnimationFrame(() => { const q = topOf(pose.get(b)); pk.style.transform = `translate3d(${q.x}px, ${q.y}px, ${q.z}px)`; }));
+    const p0 = topOf(pose.get(a)), p1 = topOf(pose.get(b));
+    const pk = blockOf('chip packet', item, p0, COL.user, 0);
+    flow.packet = pk; flow.prog = 0;
+    const lift = 70 + Math.hypot(p1.x - p0.x, p1.z - p0.z) * 0.16, T = 1250, t0 = performance.now() + 250;
+    const fly = (t) => {
+      if (!flow || flow.packet !== pk) return;
+      const k = ease(Math.max(0, Math.min(1, (t - t0) / T))), q = lerp3(p0, p1, k);
+      pk.style.transform = `translate3d(${q.x}px, ${q.y - lift * Math.sin(Math.PI * k)}px, ${q.z}px)`;
+      flow.prog = k;
+      if (k < 1) return requestAnimationFrame(fly);
+      b._el.classList.remove('next'); void b._el.offsetWidth; b._el.classList.add('active', 'recv');
+      if (i === n - 1) showRecap();
+    };
+    requestAnimationFrame(fly);
+    // long stories: the camera drifts along with the current hop
+    if (flow.wide) { const mid = (pose.get(a).x + pose.get(b).x) / 2; flyTo({ tx: -Math.max(-flow.wide, Math.min(flow.wide, mid)) }, 1100); }
     caption.innerHTML = `<div class="fc"><button data-a="prev" ${i === 0 ? 'disabled' : ''}>‹</button><span class="fn">${i + 1} / ${n}</span>
       <button data-a="play">${flow.playing ? '❚❚' : '▶'}</button><button data-a="next" ${i === n - 1 ? 'disabled' : ''}>›</button></div>
       <div><b>${esc(a.label)}</b> <span>→</span> <b>${esc(b.label)}</b>${HOW[s.how] ? ` <span class="pill">${esc(HOW[s.how])}</span>` : ''}</div>
       ${s.say ? `<em>${esc(s.say)}</em>` : ''}`;
     caption.classList.add('show', 'ctl');
-    if (flow.playing && i < n - 1) flow.timer = setTimeout(() => flowStep(i + 1), Math.max(2600, 1400 + (s.say || '').length * 32));
+    if (flow.playing && i < n - 1) flow.timer = setTimeout(() => flowStep(i + 1), Math.max(3000, 1900 + (s.say || '').length * 32));
     else if (i === n - 1) flow.playing = false;
+  }
+  // the last step ends with what happened, in order; click a line to jump back to it
+  function showRecap() {
+    if (!flow || caption.querySelector('.recap')) return;
+    const r = document.createElement('div'); r.className = 'recap';
+    r.innerHTML = `<div class="rh">what happened</div>` + flow.f.steps.map((t, k) => `<button data-a="go" data-i="${k}"><i>${k + 1}</i>${esc(byId.get(t.from).label)} <span>→</span> ${esc(byId.get(t.to).label)}${t.what ? ` <span>· ${esc(t.what)}</span>` : ''}</button>`).join('');
+    caption.appendChild(r);
   }
   caption.addEventListener('click', (e) => {
     const b = e.target.closest('button'); if (!b || !flow) return;
+    if (b.dataset.a === 'go') { flow.playing = false; return flowStep(+b.dataset.i); }
     if (b.dataset.a === 'prev') { flow.playing = false; flowStep(flow.idx - 1); }
     if (b.dataset.a === 'next') { flow.playing = false; flowStep(flow.idx + 1); }
     if (b.dataset.a === 'play') { flow.playing = !flow.playing; flowStep(flow.idx >= flow.f.steps.length - 1 && flow.playing ? 0 : flow.idx); }
@@ -667,8 +691,11 @@
       if (age > 3 && !last) return;   // only the recent steps; the whole trail shows on the last step
       const [x1, y1] = ctr(byId.get(s.from)._el), [x2, y2] = ctr(byId.get(s.to)._el);
       const qx = (x1 + x2) / 2, qy = Math.min(y1, y2) - 46 - (k % 3) * 16;
+      const pr = cur ? flow.prog : 1;
       mk('path', { d: `M${x1},${y1} Q${qx},${qy} ${x2},${y2}`, fill: 'none', stroke: cur ? '#3b7cff' : '#bfc4c9', 'stroke-width': cur ? 2.4 : 1.3,
-        opacity: cur ? 0.95 : last ? 0.7 : 0.85 - age * 0.18, ...(cur ? { 'marker-end': flowArrow } : {}) }, flowG);
+        pathLength: 1, 'stroke-dasharray': '1 1', 'stroke-dashoffset': 1 - pr,
+        opacity: cur ? 0.95 : last ? 0.7 : 0.85 - age * 0.18, ...(cur && pr > 0.97 ? { 'marker-end': flowArrow } : {}) }, flowG);
+      if (cur && pr < 0.5) return;
       const mx = 0.25 * x1 + 0.5 * qx + 0.25 * x2, my = 0.25 * y1 + 0.5 * qy + 0.25 * y2;
       mk('circle', { cx: mx, cy: my, r: 8.5, fill: cur ? '#3b7cff' : '#fff', stroke: cur ? '#3b7cff' : '#c4c8cd' }, flowG);
       const tx = mk('text', { x: mx, y: my + 3.5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 600, fill: cur ? '#fff' : '#7b8188' }, flowG);
@@ -716,6 +743,7 @@
     if (wasDrag || !e.target.closest || e.button === 2) return;
     const b = e.target.closest('.box'), n = b && !b.classList.contains('gone') ? byId.get(b.dataset.id) : null;
     if (e.target.closest('.chip')) return;
+    if (n && window.SysmapEdit?.editing) return SysmapEdit.open(n, e.clientX, e.clientY);
     if (n) { if (n !== current) setScene(n); }
     else if (current && e.target.closest('#stage')) toStack();
   });
@@ -727,6 +755,7 @@
     zoom = next; apply();
   }, { passive: false });
   addEventListener('keydown', (e) => {
+    if (e.target.closest?.('input, textarea, select, #ecard')) return;   // typing in the editor
     lastInput = performance.now();
     if (flow) {
       if (e.key === 'ArrowRight') { flow.playing = false; return flowStep(flow.idx + 1); }
@@ -739,6 +768,7 @@
     else if (e.key === 'Escape' || e.key === 'Backspace') back();
     else if (e.key === '0') toStack();
     else if (e.key === 't') toggleTour();
+    else if (e.key === 'e' && window.SysmapEdit) SysmapEdit.toggle();
   });
   title.addEventListener('click', () => toStack());
 
@@ -754,7 +784,7 @@
     const inside = (n.contains || []).map((c) => c.label);
     tip.innerHTML = `<b>${esc(n.label)}</b>${n.kind ? `<span class="k">${esc(n.kind)}</span>` : ''}
       ${n.description ? `<p>${esc(n.description)}</p>` : ''}${inside.length ? `<div class="sig">holds: ${inside.map(esc).join(' · ')}</div>` : ''}
-      ${n.hostUnknown ? `<div class="unk">where this runs isn't in the repo or docs</div>` : ''}${SRC[n.source] ? `<div class="src">${SRC[n.source]}</div>` : ''}
+      ${n.hostUnknown ? `<div class="unk">where this runs isn't in the repo or docs</div>` : ''}${SRC[n.source] ? `<div class="src">${SRC[n.source]}</div>` : ''}${n._ed ? `<div class="ed">${{ new: 'added by you', changed: 'changed by you', removed: 'removed by you', noted: 'you left a note' }[n._ed]}${n._note ? `: “${esc(n._note)}”` : ''}</div>` : ''}
       <div class="m">${n.layer ? `${LAYER_NAME[n.layer]} · ` : ''}${up ? `holds up ${up}` : 'nothing on top'} · ${down ? `rests on ${down}` : 'foundation'}${n !== current ? ' · click to open' : ''}</div>`;
     placeTip(x, y);
   }
@@ -801,4 +831,5 @@
     link: (fromId, toId) => { const L = links.find((l) => l.from.id === fromId && l.to.id === toId); if (L) { userHot = true; setHot(L); } } };
   Object.assign(cam, overview()); apply();
   if (location.hash === '#tour') toggleTour();
+  window.SysmapEdit?.mount({ byId, all, edges, esc, LAYER_NAME, HOW, groups, setScene: (id) => byId.has(id) && setScene(byId.get(id)), current: () => current, hideTip });
 })();

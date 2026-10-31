@@ -35,6 +35,11 @@ It explains **how the system works, not how the code is laid out.** The reader i
   - Off-scene parts that two or more neighbours share appear faintly further out, with grey threads. This shows that, for example, all API parts meet in Postgres.
   - A caption at the bottom narrates one connection at a time. Hovering a neighbour shows what else it connects to.
   - Click a neighbour to walk there (a breadcrumb shows the path). Esc goes back a step; `0`, empty space or the title goes back to the stack.
+- **Edit mode (`e`, or "edit" under the title):** the user changes the architecture on the map, then hands the changes to you.
+  - Click a block to rename it, change its role or description, move it to another host, connect or disconnect it, leave a note, or remove it. "+ block" adds a block.
+  - The map shows the result straight away. Added blocks are outlined green, changed ones amber, removed ones faded and crossed out.
+  - "Copy for agent" copies a change request: numbered changes, plus the current context of every block they touch.
+  - "Save for agent" (only when served by `serve.mjs`) writes `changes.md` and `changes.json` next to `map.json`.
 - **Camera:**
   - drag rotates
   - shift-drag, right-drag or the arrow keys move the view
@@ -173,10 +178,25 @@ Fix build errors (unknown ids). Look at the PNGs with Read and check:
 
 `shot.mjs` loads Playwright from `~/explainers/node_modules`.
 
-## 7. Hand back
+## 7. Serve it (so edits can be saved)
+```bash
+node ~/.claude/skills/system-map/serve.mjs <project>/.system-map [port=8765] [host=127.0.0.1]
+```
+This serves every map under that folder at `/<scope>/map.html` and lets edit mode save `changes.md` next to the map. A plain file:// or static server works too; the user then uses "copy for agent".
+
+## 8. Applying map edits
+When the user says "apply the system-map changes" (or pastes a change request that starts with "# Architecture changes"):
+1. Read `<project>/.system-map/<scope>/changes.md`, or the pasted text. The JSON block lists the same changes as operations: `add`, `set`, `host`, `remove`, `connect`, `disconnect`, `note`.
+2. Treat each change as an architecture decision to carry out in the code, config and infra. A "note" is the user's intent; follow it. If a change is ambiguous, risky or destructive (e.g. removing a data store), confirm it first.
+3. Hosting facts the repo can't hold (e.g. "Qdrant runs on Dokploy") go into `infra.md`.
+4. Update `map.json` to match what you actually did, not just what was asked. Rebuild, and check with screenshots.
+5. Rename `changes.md` to `changes.applied-<date>.md`. The browser drops the handed-over edits by itself once the rebuilt map differs.
+6. Report which changes you made, which you skipped and why.
+
+## 9. Hand back
 Reply with:
 - the HTML path
 - the scope and block count
 - a 3–5 line plain summary of the architecture: where things run, the main flow, where data lives
 - anything inferred or not visible in the repo (e.g. where the database is hosted), and that answering the questions in `infra.md` or in chat fills them in
-- the controls: hover, click to open, click a neighbour to walk, drag to rotate, shift-drag to move, scroll to zoom, Esc to go back, `t` to tour
+- the controls: hover, click to open, click a neighbour to walk, drag to rotate, shift-drag to move, scroll to zoom, Esc to go back, `t` to tour, `e` to edit

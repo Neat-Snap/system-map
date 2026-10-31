@@ -1,3 +1,4 @@
+import crypto from 'node:crypto';
 // Validate a map.json and bundle it with the viewer into one self-contained HTML file.
 // Usage: node build.mjs <map.json> <out.html>
 import fs from 'node:fs';
@@ -45,7 +46,8 @@ const json = JSON.stringify(map).replace(/</g, '\\u003c');
 const title = String(map.title || roots[0].label).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const html = read('template.html')
   .replace('__TITLE__', () => title)
-  .replace('/*MAP*/', () => `window.MAP = ${json};`)
+  .replace('/*MAP*/', () => `window.MAP = ${json}; window.MAP_PATH = ${JSON.stringify(path.resolve(input))}; window.MAP_BUILT = ${JSON.stringify(crypto.createHash('sha1').update(json).digest('hex').slice(0, 12))};`)
+  .replace('/*EDIT*/', () => read('edit.js'))
   .replace('/*VIEWER*/', () => read('viewer.js'));
 fs.mkdirSync(path.dirname(path.resolve(output)), { recursive: true });
 fs.writeFileSync(output, html);
